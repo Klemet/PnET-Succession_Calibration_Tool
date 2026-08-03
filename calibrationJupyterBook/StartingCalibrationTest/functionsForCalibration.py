@@ -5818,13 +5818,19 @@ def calibrationSimulationMonoculturemanawan(duration = 100,
             # We get the index of the row when this happens and divided it by 12 (since there
             # is one row per month), this gives us the age (in years) of death.
             mask = (csv_file_cohort['Month'] == 12) & (csv_file_cohort['NSCfrac(-)'] < 0.01)
-            try:
-                idx = csv_file_cohort[mask].index[0]
-                dictOfOutput[variable] = ((idx+1)/12)
-            except:
-                # Code to handle any other error
-                # print("Havent found the index where the cohort died. Might be an issue with the cohort.csv")
-                dictOfOutput[variable] = "None"
+
+            # If there are no row where the NSC fraction goes beyond 0.01, then the cohort never dies
+            # In that case, we indicate the time of death as the duration of the simulation
+            if not mask.any():
+                dictOfOutput[variable] = str(duration)
+            else:
+                try:
+                    idx = csv_file_cohort[mask].index[0]
+                    dictOfOutput[variable] = ((idx+1)/12)
+                except Exception as e:
+                    # 'e' captures the exception object
+                    print(f"An error occurred when trying to compute the time of death of the cohort: {e}")
+                    dictOfOutput[variable] = "None"
         elif variable == "Maximum LAI":
             dictOfOutput[variable] = csv_file_cohort["LAI(m2)"].max()
         elif variable == "LAI stability":
@@ -6901,9 +6907,12 @@ def calibrate_subphase_1_2(
     target_peak_biomass: float,
     target_LAI: float,
     DictOfBounds: dict,
-    path_core: str = './SpeciesParametersSets/Calibrated_SubSubPhase1.1.3/initialCoreSpeciesParameters.json',
-    path_pnet: str = './SpeciesParametersSets/Calibrated_SubSubPhase1.1.3/initialPnETSpeciesParameters.json',
-    path_generic: str = './SpeciesParametersSets/Calibrated_SubSubPhase1.1.3/InitialGenericParameters.json',
+    # path_core: str = './SpeciesParametersSets/Calibrated_SubSubPhase1.1.3/initialCoreSpeciesParameters.json',
+    # path_pnet: str = './SpeciesParametersSets/Calibrated_SubSubPhase1.1.3/initialPnETSpeciesParameters.json',
+    # path_generic: str = './SpeciesParametersSets/Calibrated_SubSubPhase1.1.3/InitialGenericParameters.json',
+    core_dict: str = dict,
+    pnet_species_dict: str = dict,
+    generic_dict: str = dict,
     duration: int = 300,
     climate: str = "mild",
     soil: str = "SILO",
@@ -6933,9 +6942,13 @@ def calibrate_subphase_1_2(
     # ─────────────────────────────────────────────
     # LOAD INITIAL PARAMETER DICTIONARIES
     # ─────────────────────────────────────────────
-    initial_core_params = json.load(open(path_core))
-    initial_pnet_species_params = json.load(open(path_pnet))
-    initial_generic_params = json.load(open(path_generic))
+    # initial_core_params = json.load(open(path_core))
+    # initial_pnet_species_params = json.load(open(path_pnet))
+    # initial_generic_params = json.load(open(path_generic))
+
+    initial_core_params = copy.deepcopy(core_dict)
+    initial_pnet_species_params = copy.deepcopy(pnet_species_dict)
+    initial_generic_params = copy.deepcopy(generic_dict)
 
     # We edit the longevity because at this step, we still want it to be 
     # unlimited to avoid confusion with the effect of age.
@@ -7224,22 +7237,29 @@ def calibrate_subphase_1_2(
                 LAI_matched = abs(sim_LAI - original_max_LAI) / original_max_LAI <= LAI_rel_tol
 
                 if lai_iter == 10:
-                    print("LAI recalibration seems to fail. Resetting FracFol to lower values and retrying.")
-                    current_FracFol = lb_FracFol
+                    print("LAI recalibration seems to fail. Boosting FolN and retrying.")
+                    # current_FracFol = lb_FracFol
                     fracfol_step = FracFol_step
+                    current_FolN = current_FolN * 1.1
 
-                if lai_iter == 25:
+                if lai_iter == 20:
+                    print("LAI recalibration seems to fail. Boosting FolN even more and retrying.")
+                    # current_FracFol = lb_FracFol
+                    fracfol_step = FracFol_step
+                    current_FolN = current_FolN * 1.2
+
+                if lai_iter == 30:
                     print("LAI recalibration seems to fail. Printing sim and parameters :")
                     _, sim_LAI, _ = run_sim(
                         current_MaxFracFol, current_FrActWd, candidate_FracFol,
                         current_TOWood, current_TORoot, current_FolN,
-                        False, False, current_FracFolShape)
+                        True, True, current_FracFolShape)
                     raise ValueError("LAI recalibration is failing. Seems like the algorithm has dug itself into a hole.")
 
             print(f"    [Helper] ✓ LAI recalibrated. FracFol={current_FracFol:.6f} | "
                   f"MaxLAI={sim_LAI:.4f}")
 
-        return current_FracFol, current_TOWood, current_TORoot
+        return current_FracFol, current_TOWood, current_TORoot, current_FolN
     
     # ─────────────────────────────────────────────
     # BASELINE RUN
@@ -7288,6 +7308,8 @@ def calibrate_subphase_1_2(
         step       = MaxFracFol_step          # adaptive step size
         prev_error = baseline_peak_time - target_peak_time   # signed error
         iteration  = 0
+        testedMax_MaxFracFol = False
+        testedMin_MaxFracFol = False
     
         while not peak_time_matched:
             candidate_MaxFracFol  = float(current_MaxFracFol + direction * step)
@@ -7295,11 +7317,25 @@ def calibrate_subphase_1_2(
     
             # ── Bounds check (use the current direction to pick the right bound) ──
             if direction > 0 and candidate_MaxFracFol > MAXFRACFOL_CEILING:
-                print(f"  MaxFracFol reached ceiling ({MAXFRACFOL_CEILING:.4f}). Stopping Phase A.")
-                break
+                if not testedMax_MaxFracFol:
+                    print(f"  MaxFracFol reached ceiling ({MAXFRACFOL_CEILING:.4f}). Testing maximum value before exiting phase A.")
+                    # Allows us to test the maximum value before we go away
+                    candidate_MaxFracFol = MAXFRACFOL_CEILING
+                    candidate_FracFolShape = float(coupled_FracFolShape(candidate_MaxFracFol))
+                    testedMax_MaxFracFol = True
+                else:
+                    print(f"  MaxFracFol reached ceiling ({MAXFRACFOL_CEILING:.4f}). Stopping Phase A.")
+                    break
             if direction < 0 and candidate_MaxFracFol < lb_MaxFracFol:
-                print(f"  MaxFracFol reached lower bound ({lb_MaxFracFol:.6f}). Stopping Phase A.")
-                break
+                if not testedMin_MaxFracFol and candidate_MaxFracFol > 0:
+                    print(f"  MaxFracFol reached lower bound ({lb_MaxFracFol:.6f}). Testing minimum value before exiting phase A.")
+                    # Allows us to test the maximum value before we go away
+                    candidate_MaxFracFol = lb_MaxFracFol
+                    candidate_FracFolShape = float(coupled_FracFolShape(candidate_MaxFracFol))
+                    testedMin_MaxFracFol = True
+                else:
+                    print(f"  MaxFracFol reached lower bound ({lb_MaxFracFol:.6f}). Stopping Phase A.")
+                    break
     
             sim_peak_time, sim_max_LAI, _ = run_sim(
                 candidate_MaxFracFol, current_FrActWd, current_FracFol,
@@ -7332,7 +7368,7 @@ def calibrate_subphase_1_2(
                 # Now that the peak time has matched, we attempt to recalirate LAI and peak.
                 # We then re-check if the peak time is OK before we go.
                 print("Phase A Finished. Recalibrating LAI and peak before going to phase B.")
-                current_FracFol, current_TOWood, current_TORoot = recalibrate_LAI_and_biomass(
+                current_FracFol, current_TOWood, current_TORoot, current_FolN = recalibrate_LAI_and_biomass(
                     current_MaxFracFol, current_FrActWd, current_FracFol,
                     current_TOWood, current_TORoot, current_FolN,
                     original_max_LAI_phB, original_peak_biomass_phB)
@@ -7472,7 +7508,7 @@ def calibrate_subphase_1_2(
                 # Trigger helper if iterationsWithoutRecalibration == 2
                 if iterationsWithoutRecalibration >= 4:
                     print("  Relacalibrating LAI after 4 iterations of changing FrActWd...")
-                    current_FracFol, current_TOWood, current_TORoot = recalibrate_LAI_and_biomass(
+                    current_FracFol, current_TOWood, current_TORoot, current_FolN = recalibrate_LAI_and_biomass(
                         current_MaxFracFol, current_FrActWd, current_FracFol,
                         current_TOWood, current_TORoot, current_FolN,
                         original_max_LAI_phB, original_peak_biomass_phB)
@@ -7493,7 +7529,7 @@ def calibrate_subphase_1_2(
                       f"Launching final helper recalibration...")
 
             # ── Final recalibration of LAI and biomass once timing is matched ──
-            current_FracFol, current_TOWood, current_TORoot = recalibrate_LAI_and_biomass(
+            current_FracFol, current_TOWood, current_TORoot, current_FolN = recalibrate_LAI_and_biomass(
                 current_MaxFracFol, current_FrActWd, current_FracFol,
                 current_TOWood, current_TORoot, current_FolN,
                 original_max_LAI_phB, original_peak_biomass_phB,
@@ -7552,7 +7588,7 @@ def calibrate_subphase_1_2(
 
         # Recalibrate LAI and biomass at the start of Phase C
         # (since we clamped FrActWd to ub, values may have shifted)
-        current_FracFol, current_TOWood, current_TORoot = recalibrate_LAI_and_biomass(
+        current_FracFol, current_TOWood, current_TORoot, current_FolN = recalibrate_LAI_and_biomass(
             current_MaxFracFol, current_FrActWd, current_FracFol,
             current_TOWood, current_TORoot, current_FolN,
             original_max_LAI_phB, original_peak_biomass_phB)
@@ -7633,7 +7669,7 @@ def calibrate_subphase_1_2(
                 # Trigger helper recalibration every 2 iterations (same as Phase B)
                 if iterationsWithoutRecalibration_c == 2:
                     print(f"  Launching helper recalibration after {iterationsWithoutRecalibration_c} FolN steps...")
-                    current_FracFol, current_TOWood, current_TORoot = recalibrate_LAI_and_biomass(
+                    current_FracFol, current_TOWood, current_TORoot, current_FolN = recalibrate_LAI_and_biomass(
                         current_MaxFracFol, current_FrActWd, current_FracFol,
                         current_TOWood, current_TORoot, current_FolN,
                         original_max_LAI_phB, original_peak_biomass_phB)
@@ -7653,7 +7689,7 @@ def calibrate_subphase_1_2(
                       f"Launching final helper recalibration...")
 
             # ── Final recalibration of LAI and biomass once timing is matched ──
-            current_FracFol, current_TOWood, current_TORoot = recalibrate_LAI_and_biomass(
+            current_FracFol, current_TOWood, current_TORoot, current_FolN = recalibrate_LAI_and_biomass(
                 current_MaxFracFol, current_FrActWd, current_FracFol,
                 current_TOWood, current_TORoot, current_FolN,
                 original_max_LAI_phB, original_peak_biomass_phB,
@@ -7704,7 +7740,7 @@ def calibrate_subphase_1_2(
 
     # Final recalibration of LAI and peak
     print("  Calibrating LAI and biomass peak one last time...\n")
-    current_FracFol, current_TOWood, current_TORoot = recalibrate_LAI_and_biomass(
+    current_FracFol, current_TOWood, current_TORoot, current_FolN = recalibrate_LAI_and_biomass(
         current_MaxFracFol, current_FrActWd, current_FracFol,
         current_TOWood, current_TORoot, current_FolN,
         original_max_LAI_phB, original_peak_biomass_phB,
@@ -9185,7 +9221,7 @@ def get_parameters_gustafson_rules(shade_tolerance: float, tree_type: str, wood_
     CFracBiomass = linear_predict([0.5, 0.475, 0.45, 0.425, 0.4], st)
 
     # --- Fixed rules ---
-    if tree_type == "softwood":
+    if wood_type == "softwood":
         AmaxA  = 5.3
         AmaxB  = 21.5
         k      = 0.5

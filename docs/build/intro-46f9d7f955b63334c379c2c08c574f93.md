@@ -47,3 +47,17 @@ The Jupyter notebooks can then be transformed into a HTML version using the scri
 
 ```{tableofcontents}
 ```
+
+## 🤖 Statement on AI use for this documentation
+
+This documentation has been made with the help of LLMs (Large Language Models), particularly to code the Python functions that were used throughout these notebook to :
+
+- Parse LANDIS-II parameters, write then, and launch LANDIS-II simulations from Python
+- Read, edit and save into different format the empirical data or data from previous studies we're using
+- Calibrate the parameters through different algorithms
+
+Every function was made one by one, with a careful process of re-reading the code and implementing checks and print statements so that what the functions do and what they output are clear to understand, even for people not familiar with Python. As the author of the original PnET-Succession calibration tool (Clément Hardy), I've had extensive experience with coding in Python for my research before making this documentation, and was able to understand what the LLMs were producing. However, without the help of LLMs, I would most likely not have had the time to make so many functions - which are a big help in making this calibration process more transparent and replicable.
+
+Concerning the text of this documentation, it has been written at 99% by my own hand - which can be too verbose at times. I've only used an LLM to synthesize the text concerning the assumptions (see notebook 0.2) as it was a bit long. An AI model was also used to developed the methodology used in Notebook 7 for assessing the competition between tree species with a factorial experiment to isolate the effect of water and temperature.
+
+The use of AI in research is still a brand new field of ethics and questions. We're all trying to find what's acceptable or not, all the while trying to benefit from what the technology of LLMs can offer us as researchers, and how it can make our research better. I hope that my own use of AI here was reasonable.
