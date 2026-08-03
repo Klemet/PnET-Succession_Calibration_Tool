@@ -3,4 +3,5 @@
 .virtual_documents
 calibrationJupyterBook/_build/templates
 calibrationJupyterBook/_build/template
+calibrationJupyterBook/CalibrationManawan/ReferencesAndData/NFI_Data
 find * -size +100M
