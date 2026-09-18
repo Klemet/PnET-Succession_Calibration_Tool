@@ -38,6 +38,9 @@
     <loc>http://localhost:3000/startingcalibrationtest/calibration-of-the-probability-of-establishment</loc>
   </url>
   <url>
+    <loc>http://localhost:3000/startingcalibrationtest/exporting-parameters</loc>
+  </url>
+  <url>
     <loc>http://localhost:3000/startingcalibrationtest/future-additions-todo</loc>
   </url>
 </urlset>

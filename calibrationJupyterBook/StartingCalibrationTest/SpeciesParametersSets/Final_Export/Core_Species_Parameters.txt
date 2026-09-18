@@ -1,0 +1,11 @@
+LandisData	Species
+
+>>                      Sexual    Shade  Fire  Seed Disperal Dist  Vegetative   Sprout Age  Post-Fire
+>> Name      Longevity  Maturity  Tol.   Tol.  Effective  Maximum  Reprod Prob  Min    Max  Regen
+>> ----      ---------  --------  -----  ----  ---------  -------  -----------  ----------  --------
+ABIE.BAL        173        25                      30      160         0         0     0     none        
+ACER.RUB        165        5                       100     200         0.75      0     150   none        
+PICE.MAR        316        30                      79      158         0         0     0     none        
+ACER.SAH        468        40                      100     200         0.1       0     60    none        
+LARI.LAR        197        35                      100     400         0.5       0     0     none        
+POPU.TRE        309        20                      1000    5000        0.9       0     100   none        
