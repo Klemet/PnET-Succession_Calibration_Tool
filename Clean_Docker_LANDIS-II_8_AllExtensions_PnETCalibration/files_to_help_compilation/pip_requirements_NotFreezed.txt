@@ -26,7 +26,7 @@ executing
 fastjsonschema
 fonttools
 fqdn
-GDAL
+GDAL==3.8.4
 geopandas
 h11
 httpcore

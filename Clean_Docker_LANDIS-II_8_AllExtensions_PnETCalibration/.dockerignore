@@ -1,0 +1,15 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+
+# Version control / IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# The image only needs pip_requirements.txt from files_to_help_compilation.
+# Exclude the other requirement variants to keep the build context lean,
+# but keep them if ever referenced.
+files_to_help_compilation/*
+!files_to_help_compilation/pip_requirements.txt
